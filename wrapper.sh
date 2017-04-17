@@ -6,6 +6,7 @@ workdir=/tmp
 optdir=/opt
 numPMIDs=9999999
 synapseDir=syn8506589
+synapseOutDir=$synapseDir
 synapseDataDir=syn8520180
 test=false
 
@@ -19,15 +20,23 @@ do
         esac
 done
 
-if [ test ]
+if $test
   then
-    numPMIDs=20
+    numPMIDs=25
     synapseDir=syn8532321
+    synapseOutDir=syn9620237
 fi
 
 $optdir/download.sh
 
 # Download data from Synapse to /workdir/pubMunch/data
+
+if [[! -z $synapseUsername && ! -z $synapsePassword]]
+  then
+   synapse login -u $synapseUsername -p $synapsePassword --rememberMe
+   loggedIn=true
+fi
+
 mkdir $workdir/pubMunch/data
 synapse get -r $synapseDataDir --downloadLocation $workdir/pubMunch/data
 
@@ -66,30 +75,37 @@ fi
 
 # Download previously found mutations
 # TODO
-#synapse get syn... --downloadLocation $workdir
-touch $workdir/foundMutations.tsv
-echo "this is a header line\n" > $workdir/foundMutations.tsv 
+synapse get syn8683582 --downloadLocation $workdir
+#touch $workdir/foundMutations.tsv
+#echo "this is a header line\n" > $workdir/foundMutations.tsv
 
 cat $workdir/foundMutations.tsv  <(tail -n +2 $workdir/mutations.tsv) > $workdir/all_mutations.tsv
 
-# 
-echo "Matching mutations to BRCA variants"
-if [ test ]
+echo "Uploading PubMunch results"
+cp $workdir/all_mutations.tsv $workdir/foundMutations.tsv
+cp $workdir/allPmids.txt $workdir/crawledPmids.txt
+
+if $loggedIn
   then
-    synapse get syn8532322 --downloadLocation /work
+    synapse add $workdir/foundMutations.tsv --parentId=$synapseOutDir
+    synapse add $workdir/crawledPmids.txt --parentId=$synapseOutDir
 fi
+
+echo "Matching mutations to BRCA variants"
+if $test
+  then
+    synapse get syn8532322 --downloadLocation $workdir
+fi
+
 gunzip $workdir/CrawlText/0_00000.articles.gz
 python $optdir/pubs_json.py $workdir/all_mutations.tsv $workdir/CrawlText/0_00000.articles $workdir/BRCApublications.json
 
 echo "Uploading mutations and pmids"
-# Upload new list of PMIDs, mutations, and output json file
-if [[-n $password && -n $username ]]
+# Upload  output json file
+if $loggedIn
   then
-    synapse login -u $synapseUsername -p $synapsePassword --rememberMe
-    mv $workdir/Crawl/pmids.txt $workdir/crawledPmids.txt
-    mv $workdir/all_mutations.tsv $workdir/foundMutations.tsv
-    synapse add $workdir/crawledPmids.txt --parentId=$synapseDir
-    synapse add $workdir/foundMutations.tsv --parentId=$synapseDir
-    synapse add $workdir/BRCApublications.json --parentId=$synapseDir
+    synapse add $workdir/BRCApublications.json --parentId=$synapseOutDir
+else
+    cat BRCApublications.json
 fi
 echo "Success!"
