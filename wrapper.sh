@@ -5,6 +5,8 @@ set -e
 workdir=/work
 optdir=/opt
 numPMIDs=9999999
+synapseDir=syn8506589
+synapseDataDir=syn8520180
 test=false
 
 while getopts u:p:t option
@@ -20,6 +22,7 @@ done
 if [ test ]
   then
     numPMIDs=20
+    synapseDir=syn8532321
 fi
 
 mirror=$(python -c "from urllib2 import urlopen; import json; print json.load( urlopen('http://www.apache.org/dyn/closer.lua?path=$path&asjson=1'))['preferred']")
@@ -27,11 +30,9 @@ wget -O /work/pubMunch/external/pdfbox-app-2.0.5.jar ${mirror}pdfbox/2.0.5/pdfbo
 
 wget -O /work/pubMunch/external/docx2txt-1.4.txt https://sourceforge.net/projects/docx2txt/files/latest/download
 
-synapse login -u $synapseUsername -p $synapsePassword --rememberMe
-
 # Download data from Synapse to /workdir/pubMunch/data
 mkdir $workdir/pubMunch/data
-synapse get -r syn8520180 --downloadLocation $workdir/pubMunch/data
+synapse get -r $synapseDataDir --downloadLocation $workdir/pubMunch/data
 
 mkdir $workdir/Crawl $workdir/CrawlText
 
@@ -46,22 +47,25 @@ python $optdir/getpubs.py $workdir/pubmedResponse.xml > $workdir/allPmids.txt
 
 # Download list of previously crawled PMIDs from synapse
 # TODO
-#synapse get syn... --downloadLocation $workdir
-touch $workdir/crawledPmids.txt
+synapse get syn8683574 --downloadLocation $workdir
+#touch $workdir/crawledPmids.txt
 
 # Determine which PMIDs are new since the last run
 sort -i $workdir/allPmids.txt
 sort -i $workdir/crawledPmids.txt
 grep -F -x -v -f $workdir/crawledPmids.txt $workdir/allPmids.txt > $workdir/Crawl/pmids.txt
 
-# Crawl the new PMIDs
-$workdir/pubMunch/pubCrawl2 -du $workdir/Crawl
+if [[ $(wc -l $workdir/Crawl/pmids.txt | awk '{print $1}') -ge 1 ]]
+  then 
+    # Crawl the new PMIDs
+    $workdir/pubMunch/pubCrawl2 -du $workdir/Crawl
 
-# Convert crawled papers to text
-$workdir/pubMunch/pubConvCrawler $workdir/Crawl $workdir/CrawlText
+    # Convert crawled papers to text
+    $workdir/pubMunch/pubConvCrawler $workdir/Crawl $workdir/CrawlText
 
-# Find mutations in crawled papers
-$workdir/pubMunch/pubFindMutations $workdir/CrawlText $workdir/mutations.tsv
+    # Find mutations in crawled papers
+    $workdir/pubMunch/pubFindMutations $workdir/CrawlText $workdir/mutations.tsv
+fi
 
 # Download previously found mutations
 # TODO
@@ -78,12 +82,17 @@ if [ test ]
     synapse get syn8532322 --downloadLocation /work
 fi
 gunzip $workdir/CrawlText/0_00000.articles.gz
-python $optdir/pubs_json.py $workdir/all_mutations.tsv $workdir/CrawlText/0_00000.articles > $workdir/brca_pubs.json
+python $optdir/pubs_json.py $workdir/all_mutations.tsv $workdir/CrawlText/0_00000.articles $workdir/BRCApublications.json
 
 echo "Uploading mutations and pmids"
-# Upload new list of PMIDs and mutations
-mv $workdir/Crawl/pmids.txt $workdir/crawledPmids.txt
-mv $workdir/all_mutations.tsv $workdir/foundMutations.tsv
-synapse add $workdir/crawledPmids.txt --parentId=syn8506589
-synapse add $workdir/foundMutations.tsv --parentId=syn8506589
-
+# Upload new list of PMIDs, mutations, and output json file
+if [[-n $password && -n $username ]]
+  then
+    synapse login -u $synapseUsername -p $synapsePassword --rememberMe
+    mv $workdir/Crawl/pmids.txt $workdir/crawledPmids.txt
+    mv $workdir/all_mutations.tsv $workdir/foundMutations.tsv
+    synapse add $workdir/crawledPmids.txt --parentId=$synapseDir
+    synapse add $workdir/foundMutations.tsv --parentId=$synapseDir
+    synapse add $workdir/BRCApublications.json --parentId=$synapseDir
+fi
+echo "Success!"
