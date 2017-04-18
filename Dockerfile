@@ -15,6 +15,9 @@ RUN chmod +x /opt/*
 RUN mkdir /work
 WORKDIR /work
 
+RUN wget  https://github.com/mozilla/geckodriver/releases/download/v0.15.0/geckodriver-v0.15.0-linux64.tar.gz
+RUN tar xzf geckodriver-v0.15.0-linux64.tar.gz  -C /usr/local/bin && rm geckodriver-v0.15.0-linux64.tar.gz
+
 RUN git clone -b brca --single-branch https://github.com/almussel/pubMunch.git
 
 RUN mkdir /work/pubMunch/external
