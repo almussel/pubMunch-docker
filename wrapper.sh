@@ -2,7 +2,7 @@
 
 set -e
 
-workdir=/work
+workdir=/tmp
 optdir=/opt
 numPMIDs=9999999
 synapseDir=syn8506589
@@ -25,10 +25,7 @@ if [ test ]
     synapseDir=syn8532321
 fi
 
-mirror=$(python -c "from urllib2 import urlopen; import json; print json.load( urlopen('http://www.apache.org/dyn/closer.lua?path=$path&asjson=1'))['preferred']")
-wget -O /work/pubMunch/external/pdfbox-app-2.0.5.jar ${mirror}pdfbox/2.0.5/pdfbox-app-2.0.5.jar
-
-wget -O /work/pubMunch/external/docx2txt-1.4.txt https://sourceforge.net/projects/docx2txt/files/latest/download
+$optdir/download.sh
 
 # Download data from Synapse to /workdir/pubMunch/data
 mkdir $workdir/pubMunch/data
